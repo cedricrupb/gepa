@@ -429,6 +429,9 @@ def optimize(
         _bind_lm_kwargs = getattr(reflection_strategy, "bind_lm_kwargs", None)
         if callable(_bind_lm_kwargs):
             _bind_lm_kwargs(reflection_lm_kwargs)
+        _bind_adapter = getattr(reflection_strategy, "bind_adapter", None)
+        if callable(_bind_adapter):
+            _bind_adapter(active_adapter)
 
     reflective_proposer = ReflectiveMutationProposer(
         logger=logger,

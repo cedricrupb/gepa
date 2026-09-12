@@ -99,10 +99,10 @@ class ReflectiveMutationProposer:
             InstructionProposalSignature.validate_prompt_template(reflection_prompt_template)
 
         if reflection_strategy is not None and (
-            adapter.propose_new_texts is not None or custom_candidate_proposer is not None
+            (hasattr(adapter, "propose_new_texts") and adapter.propose_new_texts is not None) or custom_candidate_proposer is not None
         ):
             owner = (
-                "adapter.propose_new_texts" if adapter.propose_new_texts is not None else "custom_candidate_proposer"
+                "adapter.propose_new_texts" if (hasattr(adapter, "propose_new_texts") and adapter.propose_new_texts) else "custom_candidate_proposer"
             )
             raise ValueError(
                 f"reflection_strategy was provided, but {owner} owns proposal generation "
@@ -157,7 +157,7 @@ class ReflectiveMutationProposer:
             ComBEE record per-call intermediates here).
         """
         empty: dict[str, str | list[dict[str, Any]]] = {}
-        if self.adapter.propose_new_texts is not None:
+        if (hasattr(self.adapter, "propose_new_texts") and self.adapter.propose_new_texts is not None):
             return self.adapter.propose_new_texts(candidate, reflective_dataset, components_to_update), empty, {}, {}
 
         if self.custom_candidate_proposer is not None:
@@ -207,7 +207,7 @@ class ReflectiveMutationProposer:
         """
         mds: list[Mapping[str, Any] | None] = metadatas if metadatas is not None else [None] * len(jobs)
         if (
-            self.adapter.propose_new_texts is not None
+            (hasattr(self.adapter, "propose_new_texts") and self.adapter.propose_new_texts is not None)
             or self.custom_candidate_proposer is not None
             or self._reflection_lm is None
         ):
