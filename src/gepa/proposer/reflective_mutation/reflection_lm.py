@@ -22,7 +22,6 @@ from gepa.strategies.instruction_proposal import InstructionProposalSignature
 # One reflection job = (candidate, reflective_dataset, components_to_update).
 ReflectionJob = tuple[dict[str, str], "Mapping[str, Sequence[Mapping[str, Any]]]", list[str]]
 
-
 @dataclass
 class ReflectionProposal:
     """Output of one :meth:`ReflectionLM.reflect` call.
@@ -91,6 +90,18 @@ class SeedableReflectionLM(ReflectionLM, Protocol):
     """
 
     def bind_rng(self, rng: Any) -> None: ...
+
+
+@runtime_checkable
+class ContextualReflectionLM(Protocol):
+    def reflect_with_context(
+        self,
+        candidate: dict[str, str],
+        reflective_dataset: Mapping[str, Sequence[Mapping[str, Any]]],
+        components_to_update: list[str],
+        context: Mapping[str, Any],
+    ) -> tuple[ReflectionProposal, "ContextualReflectionLM"]:
+        ...
 
 
 class StatelessReflectionLM:

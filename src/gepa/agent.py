@@ -11,7 +11,7 @@ import signal
 import threading
 import time
 import traceback
-from typing import Any
+from typing import Any, Mapping
  
 from gepa.proposer.reflective_mutation.base import LanguageModel
  
@@ -71,7 +71,7 @@ Use Python to interact with the environment and solve the user's task. You may u
 
 Each turn, write exactly one executable Python code block, fenced with the delimiter alone on its own line:
 
-```python
+```pyaction
 # code
 ```
 
@@ -103,10 +103,10 @@ Only finish once the information needed for the result has already been establis
 """.strip()
 
 _PYTHON_BLOCK_RE = re.compile(
-    r"^[ \t]*```python[ \t]*\r?\n(?P<code>.*?)^[ \t]*```[ \t]*(?:\r?\n|\Z)",
+    r"^[ \t]*```pyaction[ \t]*\r?\n(?P<code>.*?)^[ \t]*```[ \t]*(?:\r?\n|\Z)",
     re.MULTILINE | re.DOTALL,
 )
-_PYTHON_OPEN_RE = re.compile(r"^[ \t]*```python[ \t]*$", re.MULTILINE)
+_PYTHON_OPEN_RE = re.compile(r"^[ \t]*```pyaction[ \t]*$", re.MULTILINE)
 
 
 class Agent:
@@ -115,6 +115,8 @@ class Agent:
     def __init__(
         self,
         lm: LanguageModel | str,
+        *,
+        tools: Mapping[str, Any] | None = None,
         step_limit: int = 0,
         cost_limit: float = 2.0,
         wall_time_limit_seconds: int = 0,
@@ -138,6 +140,7 @@ class Agent:
                 lm = TrackingLM(lm)
 
         self.lm = lm
+        self.tools = dict(tools or {})
         self.step_limit = step_limit
         self.wall_time_limit_seconds = wall_time_limit_seconds
         self.cost_limit = cost_limit
@@ -221,16 +224,16 @@ class Agent:
         if n_open == 0:
             return (
                 "Your response does not include a Python code block fenced with "
-                "```python and ```. Send exactly one executable Python block."
+                "```pyaction and ```. Send exactly one executable Python block."
             )
         if n_open > 1:
-            return "Send exactly one ```python code block per turn."
+            return "Send exactly one ```pyaction code block per turn."
         if n_closed == 0:
             return (
-                "Your ```python code block was not closed with ``` on its own line. "
+                "Your ```pyaction code block was not closed with ``` on its own line. "
                 "Resend one complete block."
             )
-        return "Send exactly one complete executable ```python code block per turn."
+        return "Send exactly one complete executable ```pyaction code block per turn."
 
     # -- prompt / namespace description ----------------------------------
 
@@ -869,7 +872,9 @@ class Agent:
         self._start_tokens_out += self.total_tokens_out
 
     def __call__(self, prompt: str | list[dict[str, Any]], **state: Any) -> Any:
-        namespace: dict[str, Any] = dict(state)
+        namespace: dict[str, Any] = dict(self.tools)
+        namespace.update(state)
+
         finish_callable = namespace.get("finish", _finish)
         namespace["finish"] = finish_callable
         namespace.setdefault("__name__", "__codereact__")

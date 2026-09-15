@@ -35,7 +35,8 @@ from gepa.proposer.reflective_mutation.base import (
     LanguageModel,
     ReflectionComponentSelector,
 )
-from gepa.proposer.reflective_mutation.reflection_lm import ReflectionLM, StatelessReflectionLM
+
+from gepa.proposer.reflective_mutation.reflection_lm import ReflectionLM, StatelessReflectionLM, ContextualReflectionLM
 from gepa.strategies.batch_sampler import BatchSampler
 from gepa.strategies.instruction_proposal import InstructionProposalSignature
 from gepa.strategies.proposal_sampling import ProposalTask, SamplingStrategy, SingleMutationSampling
@@ -181,11 +182,22 @@ class ReflectiveMutationProposer:
         if self._reflection_lm is None:
             raise ValueError("reflection_lm must be provided when adapter.propose_new_texts is None.")
 
-        # Delegate to the ReflectionLM (#329 Phase 1). Stateful implementations
-        # return a successor carrying accumulated context; chain it so session
-        # state actually persists (stateless implementations return self,
-        # making this a no-op).
-        proposal, next_lm = self._reflection_lm.reflect(candidate, reflective_dataset, components_to_update)
+        reflect_with_context = getattr(self._reflection_lm, "reflect_with_context", None)
+        context = metadata.get("context") if metadata else None
+        if context is not None and reflect_with_context is not None:
+            proposal, next_lm = reflect_with_context(
+                                    candidate,
+                                    reflective_dataset,
+                                    components_to_update,
+                                    context,
+                                )
+        else:
+            # Delegate to the ReflectionLM (#329 Phase 1). Stateful implementations
+            # return a successor carrying accumulated context; chain it so session
+            # state actually persists (stateless implementations return self,
+            # making this a no-op).
+            proposal, next_lm = self._reflection_lm.reflect(candidate, reflective_dataset, components_to_update)
+
         self._reflection_lm = next_lm
         return proposal.new_texts, proposal.prompts, proposal.raw_lm_outputs, proposal.metadata
 
@@ -515,10 +527,15 @@ class ReflectiveMutationProposer:
         # directories to read/write, and the sequence isn't unique under
         # concurrency.
         jobs = [(p[0].parent_candidate, p[3], p[2]) for p in prepared if p is not None]
+
         job_metadatas: list[Mapping[str, Any] | None] = [
             {
                 "iteration_id": iteration_id,
                 "parent_iteration_id": state.iteration_id_for_candidate_idx(p[0].parent_idx),
+                "context": {
+                    "parent_idx": p[0].parent_idx,
+                    "gepa_state": state,
+                }
             }
             for p in prepared
             if p is not None
